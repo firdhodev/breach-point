@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101820">
+  <title>BREACH POINT — Tactical Operations</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #e8f0ee;
+      --muted: #91a5a5;
+      --panel: rgba(11, 20, 26, .92);
+      --line: rgba(191, 218, 211, .2);
+      --accent: #e5a64c;
+      --friendly: #68c3b4;
+      --hostile: #e06f61;
+      --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #101820; color: var(--ink); }
+    body { user-select: none; }
+    #game, #game canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    #hud { position: fixed; inset: 0; pointer-events: none; }
+    #crosshair {
+      position: absolute; left: 50%; top: 50%; width: 22px; height: 22px;
+      transform: translate(-50%, -50%);
+    }
+    #crosshair::before, #crosshair::after { content: ''; position: absolute; background: #f4f7ed; box-shadow: 0 0 3px #071014; }
+    #crosshair::before { left: 10px; top: 2px; width: 2px; height: 18px; }
+    #crosshair::after { left: 2px; top: 10px; width: 18px; height: 2px; }
+    .readout {
+      position: absolute; padding: 12px 16px; border: 1px solid var(--line);
+      background: linear-gradient(135deg, rgba(10, 19, 25, .86), rgba(10, 19, 25, .52));
+      text-shadow: 0 1px 4px #000;
+    }
+    .label { display: block; margin-bottom: 3px; color: var(--muted); font: 600 10px/1.2 var(--mono); letter-spacing: .16em; text-transform: uppercase; }
+    #health { left: 24px; bottom: 24px; min-width: 150px; border-left: 3px solid var(--friendly); }
+    #health-value { font: 600 25px/1 var(--mono); }
+    #ammo { right: 24px; bottom: 24px; min-width: 164px; text-align: right; border-right: 3px solid var(--accent); }
+    #ammo-value { font: 600 27px/1 var(--mono); }
+    #ammo-reserve { color: var(--muted); font: 500 14px/1 var(--mono); }
+    #round-timer { left: 50%; top: 22px; transform: translateX(-50%); min-width: 118px; text-align: center; border-top: 2px solid var(--accent); }
+    #timer-value { font: 600 22px/1 var(--mono); letter-spacing: .08em; }
+    #score { right: 24px; top: 22px; min-width: 164px; text-align: right; }
+    #score-value { font: 600 18px/1.2 var(--mono); }
+    #kill-feed { position: absolute; top: 88px; right: 24px; display: grid; gap: 6px; width: min(300px, 40vw); text-align: right; }
+    .kill-feed-entry { padding: 7px 10px; color: var(--ink); background: rgba(8, 16, 21, .72); border-right: 2px solid var(--hostile); font: 12px/1.3 var(--mono); }
+    #round-message {
+      position: absolute; left: 50%; top: 35%; transform: translate(-50%, -50%);
+      color: var(--accent); font: 700 clamp(18px, 3vw, 34px)/1.1 var(--mono);
+      letter-spacing: .14em; text-align: center; text-shadow: 0 2px 12px #000;
+    }
+    #buy-menu {
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      width: min(620px, calc(100vw - 32px)); max-height: min(75vh, 620px); overflow: auto;
+      padding: 24px; border: 1px solid var(--line); border-top: 3px solid var(--accent);
+      background: var(--panel); box-shadow: 0 18px 70px rgba(0, 0, 0, .55);
+    }
+    #buy-menu[hidden], #round-message:empty, #kill-feed:empty { display: none; }
+    #buy-menu h2 { margin: 0 0 4px; font: 600 18px/1.2 var(--mono); letter-spacing: .08em; }
+    #buy-menu p { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
+    #buy-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+    .buy-option { padding: 12px; border: 1px solid var(--line); background: rgba(255,255,255,.03); color: var(--ink); font: 12px/1.4 var(--mono); }
+    #start-overlay {
+      position: fixed; inset: 0; z-index: 5; display: grid; place-items: center; padding: 24px;
+      background: radial-gradient(ellipse at center, rgba(11, 21, 27, .76), rgba(6, 12, 17, .94));
+    }
+    #start-overlay[hidden] { display: none; }
+    .start-card { width: min(520px, 100%); padding: clamp(24px, 5vw, 44px); border: 1px solid var(--line); border-left: 4px solid var(--accent); background: var(--panel); box-shadow: 0 24px 90px rgba(0,0,0,.4); }
+    .eyebrow { color: var(--friendly); font: 600 11px/1.4 var(--mono); letter-spacing: .22em; }
+    .start-card h1 { margin: 10px 0 12px; font: 700 clamp(34px, 7vw, 58px)/.96 var(--mono); letter-spacing: -.06em; }
+    .start-card p { max-width: 43ch; margin: 0 0 22px; color: #b6c5c2; line-height: 1.55; }
+    #start-button { border: 0; padding: 13px 18px; color: #111820; background: var(--accent); cursor: pointer; font: 700 12px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+    #start-button:hover, #start-button:focus-visible { background: #f3c477; outline: 2px solid var(--ink); outline-offset: 3px; }
+    .controls { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 24px; color: var(--muted); font: 11px/1.5 var(--mono); }
+    @media (max-width: 560px) {
+      #health { left: 12px; bottom: 12px; min-width: 122px; } #ammo { right: 12px; bottom: 12px; min-width: 140px; }
+      #score { top: 12px; right: 12px; } #round-timer { top: 12px; } #kill-feed { right: 12px; top: 70px; }
+    }
+  </style>
+</head>
+<body>
+  <main id="game" aria-label="BREACH POINT tactical operations"></main>
+  <div id="hud" aria-live="polite">
+    <div id="crosshair" aria-hidden="true"></div>
+    <div id="health" class="readout"><span class="label">Vitality</span><span id="health-value">100</span></div>
+    <div id="ammo" class="readout"><span class="label">Magazine</span><span id="ammo-value">30</span> <span id="ammo-reserve">/ 90</span></div>
+    <div id="round-timer" class="readout"><span class="label">Operation</span><span id="timer-value">01:45</span></div>
+    <div id="score" class="readout"><span class="label">Vanguard : Outriders</span><span id="score-value">0 : 0</span></div>
+    <div id="kill-feed" aria-label="Recent eliminations"></div>
+    <section id="buy-menu" aria-label="Field requisitions" hidden>
+      <h2>FIELD REQUISITIONS</h2><p>Choose a loadout before deployment.</p><div id="buy-options"></div>
+    </section>
+    <div id="round-message" role="status"></div>
+  </div>
+  <section id="start-overlay" aria-labelledby="game-title">
+    <div class="start-card">
+      <div class="eyebrow">TACTICAL OPERATIONS / SECTOR 07</div>
+      <h1 id="game-title">BREACH<br>POINT</h1>
+      <p>Two units enter the wind-cut industrial frontier. Secure the site, manage your kit, and keep your shots deliberate.</p>
+      <button id="start-button" type="button">Click to deploy</button>
+      <div class="controls"><span>WASD Move</span><span>Mouse Aim</span><span>Click Fire</span><span>R Reload</span><span>Shift Sprint</span><span>Ctrl Crouch</span></div>
+    </div>
+  </section>
+  <script type="importmap">
+    { "imports": { "three": "./vendor/three/three.module.min.js" } }
+  </script>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
